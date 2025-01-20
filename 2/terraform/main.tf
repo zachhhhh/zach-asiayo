@@ -1,5 +1,5 @@
 provider "aws" {
-  region = "ap-northeast-1"  # Tokyo region
+  region = "ap-northeast-1"
 }
 
 module "vpc" {
@@ -9,21 +9,15 @@ module "vpc" {
   name = "asiayo-vpc"
   cidr = "10.0.0.0/16"
 
-  azs             = ["ap-northeast-1a", "ap-northeast-1c", "ap-northeast-1d"]
-  private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
-  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+  azs             = ["ap-northeast-1a", "ap-northeast-1c"]
+  private_subnets = ["10.0.1.0/24", "10.0.2.0/24"]
+  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24"]
 
   enable_nat_gateway = true
-  single_nat_gateway = false
-  one_nat_gateway_per_az = true
+  single_nat_gateway = true
 
   enable_dns_hostnames = true
   enable_dns_support   = true
-
-  tags = {
-    Environment = "production"
-    Project     = "asiayo"
-  }
 }
 
 module "eks" {
@@ -40,17 +34,10 @@ module "eks" {
 
   eks_managed_node_groups = {
     general = {
-      desired_size = 3
-      min_size     = 3
-      max_size     = 5
-
+      desired_size = 2
+      min_size     = 2
+      max_size     = 4
       instance_types = ["t3.large"]
-      capacity_type  = "ON_DEMAND"
     }
-  }
-
-  tags = {
-    Environment = "production"
-    Project     = "asiayo"
   }
 }

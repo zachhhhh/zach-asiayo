@@ -1,73 +1,16 @@
 apiVersion: v1
-kind: Service
+kind: PersistentVolume
 metadata:
-  name: asiayo-svc
+  name: asiayo-pv
   namespace: asiayo
 spec:
-  selector:
-    app: asiayo
-  ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 8080
-  type: ClusterIP
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: asiayo-app
-  namespace: asiayo
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: asiayo
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-  template:
-    metadata:
-      labels:
-        app: asiayo
-    spec:
-      containers:
-      - name: asiayo-app
-        image: asiayo.com/app:latest  # Replace with your actual image
-        ports:
-        - containerPort: 8080
-        env:
-        - name: DB_HOST
-          value: mysql.asiayo.svc.cluster.local
-        - name: DB_USER
-          value: asiayo
-        - name: DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-secrets
-              key: MYSQL_PASSWORD
-        - name: DB_NAME
-          value: asiayo
-        resources:
-          requests:
-            cpu: 500m
-            memory: 512Mi
-          limits:
-            cpu: 1000m
-            memory: 1Gi
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 15
-          periodSeconds: 20
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+  awsElasticBlockStore:
+    volumeID: vol-xxx
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -82,14 +25,63 @@ spec:
     requests:
       storage: 10Gi
 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: asiayo-deploy
+  namespace: asiayo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: asiayo
+  template:
+    metadata:
+      labels:
+        app: asiayo
+    spec:
+      containers:
+      - name: asiayo-app
+        image: asiayo.com/app:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_WRITER_HOST
+          value: mysql-writer
+        - name: DB_READER_HOST
+          value: mysql-reader
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secrets
+              key: MYSQL_PASSWORD
+        volumeMounts:
+        - name: app-storage
+          mountPath: /data
+      volumes:
+      - name: app-storage
+        persistentVolumeClaim:
+          claimName: asiayo-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: asiayo-svc
+  namespace: asiayo
+spec:
+  selector:
+    app: asiayo
+  ports:
+    - port: 80
+      targetPort: 8080
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: asiayo-ingress
+  name: asiayo-ing
   namespace: asiayo
   annotations:
     kubernetes.io/ingress.class: "nginx"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   rules:
   - host: asiayo.com

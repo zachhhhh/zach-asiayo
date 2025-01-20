@@ -5,20 +5,8 @@ metadata:
   namespace: asiayo
 type: Opaque
 data:
-  MYSQL_ROOT_PASSWORD: YXNpYXlvLXJvb3QtcGFzcw==  # asiayo-root-pass
-  MYSQL_PASSWORD: YXNpYXlvLXBhc3M=              # asiayo-pass
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: mysql
-  namespace: asiayo
-spec:
-  ports:
-  - port: 3306
-  selector:
-    app: mysql
-  clusterIP: None
+  MYSQL_ROOT_PASSWORD: YXNpYXlvLXBhc3M=
+  MYSQL_PASSWORD: YXNpYXlvLXBhc3M=
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -27,7 +15,7 @@ metadata:
   namespace: asiayo
 spec:
   serviceName: mysql
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: mysql
@@ -47,32 +35,46 @@ spec:
               key: MYSQL_ROOT_PASSWORD
         - name: MYSQL_DATABASE
           value: asiayo
-        - name: MYSQL_USER
-          value: asiayo
-        - name: MYSQL_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-secrets
-              key: MYSQL_PASSWORD
         ports:
         - containerPort: 3306
-          name: mysql
-        volumeMounts:
-        - name: mysql-data
-          mountPath: /var/lib/mysql
-        resources:
-          requests:
-            cpu: 500m
-            memory: 1Gi
-          limits:
-            cpu: 1000m
-            memory: 2Gi
-  volumeClaimTemplates:
-  - metadata:
-      name: mysql-data
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      storageClassName: gp2
-      resources:
-        requests:
-          storage: 10Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mysql-writer
+  namespace: asiayo
+  labels:
+    role: writer
+spec:
+  containers:
+  - name: mysql
+    image: mysql:8.0
+    env:
+    - name: MYSQL_ROOT_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: mysql-secrets
+          key: MYSQL_ROOT_PASSWORD
+    ports:
+    - containerPort: 3306
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mysql-reader
+  namespace: asiayo
+  labels:
+    role: reader
+spec:
+  containers:
+  - name: mysql
+    image: mysql:8.0
+    args: ["--read-only"]
+    env:
+    - name: MYSQL_ROOT_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: mysql-secrets
+          key: MYSQL_ROOT_PASSWORD
+    ports:
+    - containerPort: 3306
